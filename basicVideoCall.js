@@ -11,14 +11,17 @@
  * @param  {string} codec - The {@link https://docs.agora.io/en/Voice/API%20Reference/web_ng/interfaces/clientconfig.html#codec| client codec} used by the browser.
  */
 var client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-// 默认设置为观众
-client.setClientRole('audience');
+
+// 默认设置为主播
+client.setClientRole('host');
+
+$("#appid").val("323ec24eaa9b4fdb9c8d9adde0399e2f");
 
 /*
  * Clear the video and audio tracks used by `client` on initiation.
  */
 var localTracks = {
-  videoTrack: null,
+  // videoTrack: null,
   audioTrack: null
 };
 
@@ -52,16 +55,16 @@ AgoraRTC.onMicrophoneChanged = async (changedDevice) => {
   }
 }
 
-AgoraRTC.onCameraChanged = async (changedDevice) => {
-  // When plugging in a device, switch to a device that is newly plugged in.
-  if (changedDevice.state === "ACTIVE") {
-    localTracks.videoTrack.setDevice(changedDevice.device.deviceId);
-    // Switch to an existing device when the current device is unplugged.
-  } else if (changedDevice.device.label === localTracks.videoTrack.getTrackLabel()) {
-    const oldCameras = await AgoraRTC.getCameras();
-    oldCameras[0] && localTracks.videoTrack.setDevice(oldCameras[0].deviceId);
-  }
-}
+// AgoraRTC.onCameraChanged = async (changedDevice) => {
+//   // When plugging in a device, switch to a device that is newly plugged in.
+//   if (changedDevice.state === "ACTIVE") {
+//     localTracks.videoTrack.setDevice(changedDevice.device.deviceId);
+//     // Switch to an existing device when the current device is unplugged.
+//   } else if (changedDevice.device.label === localTracks.videoTrack.getTrackLabel()) {
+//     const oldCameras = await AgoraRTC.getCameras();
+//     oldCameras[0] && localTracks.videoTrack.setDevice(oldCameras[0].deviceId);
+//   }
+// }
 
 /*
  * When this page is called with parameters in the URL, this procedure
@@ -102,6 +105,10 @@ $("#join-form").submit(async function (e) {
       $("#success-alert a").attr("href", `index.html?appid=${options.appid}&channel=${options.channel}&token=${options.token}`);
       $("#success-alert").css("display", "block");
     }
+
+    // 加入频道成功后，设置为观众
+    await client.unpublish();
+    await client.setClientRole('audience');
   } catch (error) {
     console.error(error);
   } finally {
@@ -121,6 +128,8 @@ $("#mic").click(async function (e) {
   // leave();
 
   await localTracks.audioTrack.setMuted(false);
+  await client.setClientRole('host');
+  await client.publish([localTracks.audioTrack]);
   $("#mic").attr("disabled", true);
 })
 
@@ -134,20 +143,20 @@ async function join() {
   client.on("user-unpublished", handleUserUnpublished);
 
   // Join a channel and create local tracks. Best practice is to use Promise.all and run them concurrently.
-  [ options.uid, localTracks.audioTrack, localTracks.videoTrack ] = await Promise.all([
+  [ options.uid, localTracks.audioTrack ] = await Promise.all([
     // Join the channel.
     client.join(options.appid, options.channel, options.token || null, options.uid || null),
     // Create tracks to the local microphone and camera.
     AgoraRTC.createMicrophoneAudioTrack(),
-    AgoraRTC.createCameraVideoTrack()
+    // AgoraRTC.createCameraVideoTrack()
   ]);
 
   // 先静音
   await localTracks.audioTrack.setMuted(true);
 
   // Play the local video track to the local browser and update the UI with the user ID.
-  localTracks.videoTrack.play("local-player");
-  $("#local-player-name").text(`localVideo(${options.uid})`);
+  // localTracks.videoTrack.play("local-player");
+  // $("#local-player-name").text(`localVideo(${options.uid})`);
 
   // Publish the local video and audio tracks to the channel.
   await client.publish(Object.values(localTracks));
